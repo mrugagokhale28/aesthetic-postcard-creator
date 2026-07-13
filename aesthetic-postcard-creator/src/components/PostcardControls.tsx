@@ -1,21 +1,15 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { PostcardConfig, PostcardSize, PostcardLayout, PostcardFilter } from '../types';
-import { COLOR_PALETTES, PRESET_IMAGES } from '../data';
+import { COLOR_PALETTES } from '../data';
 import { 
-  Upload, 
-  Download, 
   RotateCcw, 
   MapPin, 
   PenTool, 
   Sliders, 
   Type, 
   Layout, 
-  Image as ImageIcon,
   Sparkles,
-  Info,
-  Check,
-  User,
-  Heart
+  User
 } from 'lucide-react';
 
 interface PostcardControlsProps {
@@ -33,178 +27,16 @@ export default function PostcardControls({
   isDownloading,
   onReset,
 }: PostcardControlsProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Handle Photo Upload
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          onChangeConfig({ 
-            imageSrc: event.target.result as string,
-            // Reset crop adjustments on new upload
-            imageZoom: 1,
-            imageX: 0,
-            imageY: 0
-          });
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Drag and Drop handlers
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          onChangeConfig({ 
-            imageSrc: event.target.result as string,
-            imageZoom: 1,
-            imageX: 0,
-            imageY: 0
-          });
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Trigger manual upload click
-  const triggerUploadClick = () => {
-    fileInputRef.current?.click();
-  };
 
   return (
     <div className="w-full flex flex-col space-y-6 select-none max-h-full">
-      {/* HEADER WITH BRANDING & DOWNLOAD */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-zinc-200">
-        <div>
-          <span className="text-[10px] tracking-[0.3em] font-sans font-semibold text-zinc-400 uppercase">CRAFT & MINIMALISM</span>
-          <h1 className="font-serif-lux text-2xl font-semibold tracking-wide text-zinc-800">Postcard Canvas</h1>
-        </div>
-        
-        {/* Actions row */}
-        <div className="flex items-center space-x-2 mt-3 sm:mt-0">
-          <button
-            onClick={onReset}
-            title="Reset to default config"
-            className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-full transition-colors duration-200"
-          >
-            <RotateCcw className="w-4 h-4" />
-          </button>
-          
-          <button
-            onClick={onDownload}
-            disabled={isDownloading || !config.imageSrc}
-            className={`flex items-center space-x-2 px-5 py-2.5 rounded-sm font-sans text-xs tracking-wider uppercase font-medium transition-all duration-300 shadow-sm ${
-              !config.imageSrc 
-                ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed'
-                : 'bg-zinc-800 hover:bg-zinc-950 text-white hover:shadow-md'
-            }`}
-          >
-            {isDownloading ? (
-              <>
-                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                <span>Crafting...</span>
-              </>
-            ) : (
-              <>
-                <Download className="w-3.5 h-3.5" />
-                <span>Export PNG</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
 
-      {/* STEP 1: CHOOSE PHOTO */}
-      <div className="space-y-3 bg-white p-4 rounded-lg border border-zinc-100 shadow-sm">
-        <div className="flex items-center space-x-2 border-b border-zinc-100 pb-2">
-          <ImageIcon className="w-4 h-4 text-zinc-400" />
-          <h3 className="font-serif-lux text-sm font-semibold text-zinc-700 uppercase tracking-wider">1. Select Photograph</h3>
-          <span className="text-[9px] bg-zinc-800 text-white px-1.5 py-0.5 rounded font-sans uppercase font-medium tracking-wide">Mandatory</span>
-        </div>
-
-        {/* Drag and drop upload zone */}
-        <div 
-          onClick={triggerUploadClick}
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
-          className={`border-2 border-dashed rounded-md p-5 text-center cursor-pointer transition-all duration-300 ${
-            config.imageSrc 
-              ? 'border-zinc-300 bg-zinc-50/50 hover:bg-zinc-50' 
-              : 'border-zinc-300 hover:border-zinc-500 hover:bg-zinc-50/50'
-          }`}
-        >
-          <input 
-            type="file" 
-            ref={fileInputRef}
-            onChange={handlePhotoUpload}
-            accept="image/*"
-            className="hidden" 
-          />
-          
-          <div className="flex flex-col items-center justify-center space-y-1.5">
-            <div className="p-2 bg-zinc-100 rounded-full text-zinc-500">
-              <Upload className="w-4 h-4" />
-            </div>
-            {config.imageSrc ? (
-              <p className="text-xs text-emerald-600 font-sans font-medium flex items-center justify-center">
-                <Check className="w-3 h-3 mr-1" /> Custom Photo Uploaded
-              </p>
-            ) : (
-              <p className="text-xs text-zinc-600 font-sans font-medium">Click to upload or drag photo here</p>
-            )}
-            <p className="text-[10px] text-zinc-400 font-sans">Supports JPEG, PNG, HEIC up to 10MB</p>
-          </div>
-        </div>
-
-        {/* Curator's aesthetic Unsplash presets */}
-        <div>
-          <span className="text-[10px] tracking-wider text-zinc-400 font-sans font-semibold block mb-2">OR CHOOSE AN AESTHETIC TRAVEL PRESET:</span>
-          <div className="grid grid-cols-5 gap-2">
-            {PRESET_IMAGES.map((img) => (
-              <button
-                key={img.id}
-                onClick={() => onChangeConfig({ 
-                  imageSrc: img.url,
-                  imageZoom: 1,
-                  imageX: 0,
-                  imageY: 0
-                })}
-                title={`Select "${img.name}" by ${img.photographer}`}
-                className={`aspect-square rounded-sm overflow-hidden relative transition-all duration-200 border-2 ${
-                  config.imageSrc === img.url 
-                    ? 'border-zinc-800 ring-2 ring-zinc-800/10 scale-95 shadow' 
-                    : 'border-transparent opacity-85 hover:opacity-100 hover:scale-105'
-                }`}
-              >
-                <img src={img.url} alt={img.name} className="w-full h-full object-cover" />
-                <div className="absolute inset-x-0 bottom-0 bg-black/40 text-[7px] text-white py-0.5 truncate px-1 text-center font-sans font-medium">
-                  {img.name}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* STEP 2: SIZE & FORMAT LAYOUT */}
+      {/* STEP 1: SIZE & FORMAT LAYOUT */}
       <div className="space-y-4 bg-white p-4 rounded-lg border border-zinc-100 shadow-sm">
         <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
           <div className="flex items-center space-x-2">
             <Layout className="w-4 h-4 text-zinc-400" />
-            <h3 className="font-serif-lux text-sm font-semibold text-zinc-700 uppercase tracking-wider">2. Size & Layout</h3>
+            <h3 className="font-serif-lux text-sm font-semibold text-zinc-700 uppercase tracking-wider">1. Size & Layout</h3>
           </div>
         </div>
 
@@ -266,11 +98,11 @@ export default function PostcardControls({
         </div>
       </div>
 
-      {/* STEP 3: TEXTS & MESSAGE */}
+      {/* STEP 2: TEXTS & MESSAGE */}
       <div className="space-y-4 bg-white p-4 rounded-lg border border-zinc-100 shadow-sm">
         <div className="flex items-center space-x-2 border-b border-zinc-100 pb-2">
           <PenTool className="w-4 h-4 text-zinc-400" />
-          <h3 className="font-serif-lux text-sm font-semibold text-zinc-700 uppercase tracking-wider">3. Add Message & Details</h3>
+          <h3 className="font-serif-lux text-sm font-semibold text-zinc-700 uppercase tracking-wider">2. Add Message & Details</h3>
         </div>
 
         {/* Typography choice */}
@@ -391,11 +223,11 @@ export default function PostcardControls({
         </div>
       </div>
 
-      {/* STEP 4: MUTED COLORS & FILTERS */}
+      {/* STEP 3: MUTED COLORS & FILTERS */}
       <div className="space-y-4 bg-white p-4 rounded-lg border border-zinc-100 shadow-sm">
         <div className="flex items-center space-x-2 border-b border-zinc-100 pb-2">
           <Sliders className="w-4 h-4 text-zinc-400" />
-          <h3 className="font-serif-lux text-sm font-semibold text-zinc-700 uppercase tracking-wider">4. Muted Palettes & Adjustments</h3>
+          <h3 className="font-serif-lux text-sm font-semibold text-zinc-700 uppercase tracking-wider">3. Muted Palettes & Adjustments</h3>
         </div>
 
         {/* Color Palette Picker */}
@@ -547,15 +379,6 @@ export default function PostcardControls({
         )}
       </div>
 
-      {/* TIPS CORNER */}
-      <div className="p-3 bg-zinc-50 rounded border border-zinc-200/80 text-zinc-500 text-[10px] space-y-1.5 font-sans leading-relaxed">
-        <div className="flex items-center text-zinc-600 font-semibold uppercase tracking-wider text-[9px]">
-          <Info className="w-3.5 h-3.5 mr-1 text-zinc-400" /> Designer Tips
-        </div>
-        <p>• Only the **Photograph** is mandatory to generate a postcard.</p>
-        <p>• Try clicking on the photo within the preview directly to **drag and pan** it visually to fit your postcard size perfectly.</p>
-        <p>• Muted palettes look best with corresponding filter aesthetics; for example, pair *Warm Sand* with *Warm Vintage* or *Charcoal Slate* with *Noir* for maximum nostalgia.</p>
-      </div>
     </div>
   );
 }
