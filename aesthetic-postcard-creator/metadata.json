@@ -1,0 +1,6 @@
+{
+  "name": "Aesthetic Postcard Creator",
+  "description": "Create minimalist digital postcards from your photos with elegant serif typography and muted palettes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
