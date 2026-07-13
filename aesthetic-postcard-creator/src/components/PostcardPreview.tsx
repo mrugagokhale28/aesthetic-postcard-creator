@@ -11,6 +11,57 @@ import {
   Calendar 
 } from 'lucide-react';
 
+// Compress image on the fly to prevent Safari/iOS canvas blank issues
+const compressImage = (file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.85): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        // Calculate new dimensions maintaining aspect ratio
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(event.target?.result as string); // fallback to original
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Export to highly compressed but clear JPEG
+        try {
+          const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedBase64);
+        } catch (e) {
+          resolve(event.target?.result as string); // fallback on exception
+        }
+      };
+      img.onerror = (err) => reject(err);
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+};
+
 interface PostcardPreviewProps {
   config: PostcardConfig;
   onChangeConfig: (newConfig: Partial<PostcardConfig>) => void;
@@ -24,6 +75,7 @@ export default function PostcardPreview({
 }: PostcardPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const imageContainerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -158,19 +210,65 @@ export default function PostcardPreview({
       )}
     </div>
   );
-
-  // Default placeholder content if no image uploaded
-  const emptyImagePlaceholder = (
-    <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-100 border border-dashed border-zinc-300 p-8 text-center rounded-lg">
-      <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm text-zinc-400 mb-4 border border-zinc-200">
-        <MapPin className="w-6 h-6 stroke-[1.25]" />
+  // Default placeholder content if no image uploaded (Interactive upload trigger)
+  const renderEmptyImagePlaceholder = () => {
+    return (
+      <div 
+        onClick={(e) => {
+          e.stopPropagation();
+          fileInputRef.current?.click();
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        className="w-full h-full flex flex-col items-center justify-center bg-zinc-50 hover:bg-zinc-100/90 cursor-pointer p-6 text-center border-2 border-dashed border-zinc-300 rounded-sm transition-all duration-300 group/upload relative"
+      >
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              try {
+                const compressedBase64 = await compressImage(file);
+                onChangeConfig({ 
+                  imageSrc: compressedBase64,
+                  imageZoom: 1.1,
+                  imageX: 0,
+                  imageY: 0
+                });
+              } catch (err) {
+                console.error("Compression failed, fallback to standard FileReader", err);
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                  if (event.target?.result) {
+                    onChangeConfig({ 
+                      imageSrc: event.target.result as string,
+                      imageZoom: 1.1,
+                      imageX: 0,
+                      imageY: 0
+                    });
+                  }
+                };
+                reader.readAsDataURL(file);
+              }
+            }
+          }} 
+          accept="image/*" 
+          className="hidden" 
+        />
+        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm text-zinc-400 mb-3 border border-zinc-200 group-hover/upload:scale-105 transition-transform duration-300">
+          <MapPin className="w-5 h-5 stroke-[1.5] text-amber-600/80" />
+        </div>
+        <h4 className="font-serif-lux text-sm text-zinc-800 font-semibold mb-1">Add a Photograph</h4>
+        <p className="text-zinc-500 text-[10px] max-w-[200px] leading-relaxed font-sans mb-3">
+          Click to upload your custom travel memory here.
+        </p>
+        <span className="inline-flex items-center space-x-1 px-3 py-1 bg-zinc-900 text-white rounded-full text-[9px] uppercase tracking-widest font-sans font-bold shadow-sm group-hover/upload:bg-zinc-950 transition-colors">
+          <span>Upload Photo</span>
+        </span>
       </div>
-      <h4 className="font-serif-lux text-lg text-zinc-700 font-medium mb-1">No Photograph Selected</h4>
-      <p className="text-zinc-500 text-xs max-w-xs leading-relaxed font-sans">
-        Upload a memory from your device or select one of our curated aesthetic travel presets to get started.
-      </p>
-    </div>
-  );
+    );
+  };
 
   // Sizing styles for display inside the layout
   // Instagram: 1:1 aspect ratio
@@ -178,12 +276,12 @@ export default function PostcardPreview({
   const sizeAspectClass = config.size === 'instagram' ? 'aspect-square' : 'aspect-[9/11]';
 
   return (
-    <div className="w-full flex justify-center py-4 select-none">
+    <div className="w-full flex justify-center py-1.5 sm:py-3 select-none">
       {/* Card wrapper with exact aspect ratio and simulated realistic shadow */}
       <div 
         ref={exportRef}
         id="postcard-capture-container"
-        className={`w-full max-w-[500px] bg-white shadow-2xl rounded-sm overflow-hidden relative transition-all duration-300 ${sizeAspectClass}`}
+        className={`w-full max-w-[260px] sm:max-w-[360px] md:max-w-[420px] lg:max-w-[480px] xl:max-w-[500px] bg-white shadow-2xl rounded-sm overflow-hidden relative transition-all duration-300 ${sizeAspectClass}`}
         style={{ 
           backgroundColor: palette.background,
           color: palette.textPrimary,
@@ -220,8 +318,8 @@ export default function PostcardPreview({
                   }}
                 />
               ) : (
-                <div className="absolute inset-0 p-4 flex items-center justify-center bg-zinc-900/10">
-                  {emptyImagePlaceholder}
+                <div className="absolute inset-0 p-4 flex items-center justify-center bg-zinc-900/5">
+                  {renderEmptyImagePlaceholder()}
                 </div>
               )}
               
@@ -237,42 +335,73 @@ export default function PostcardPreview({
             <div className="w-full h-[50%] relative p-6 flex flex-row select-none">
               
               {/* Left Column: Note & Description */}
-              <div className="w-[52%] h-full flex flex-col justify-between pr-4 border-r" style={{ borderColor: palette.border }}>
+              <div 
+                className="w-[52%] h-full flex flex-col justify-between pr-4 border-r" 
+                style={{ borderColor: palette.border }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+              >
                 {/* Vintage Location Header */}
-                <div className="flex flex-col mb-2">
-                  <span className="font-serif-lux text-[10px] tracking-[0.2em] uppercase font-semibold leading-tight max-h-8 overflow-hidden line-clamp-1">
-                    {config.location || 'SEAL ROCKS'}
-                  </span>
-                  <span className="text-[7px] tracking-[0.1em] font-sans text-zinc-500 uppercase leading-none mt-0.5">
-                    {config.date || 'July 13, 2026'}
-                  </span>
+                <div className="flex flex-col mb-1.5 space-y-1">
+                  <input 
+                    type="text"
+                    value={config.location}
+                    onChange={(e) => onChangeConfig({ location: e.target.value })}
+                    placeholder="ENTER LOCATION"
+                    className="w-full bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-zinc-500 focus:outline-none font-serif-lux text-[10px] tracking-[0.2em] uppercase font-semibold leading-tight py-0.5"
+                    style={{ color: palette.textPrimary }}
+                  />
+                  <input 
+                    type="text"
+                    value={config.date}
+                    onChange={(e) => onChangeConfig({ date: e.target.value })}
+                    placeholder="July 13, 2026"
+                    className="w-full bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-zinc-500 focus:outline-none text-[8px] tracking-[0.1em] font-sans uppercase leading-none py-0.5"
+                    style={{ color: palette.textMuted }}
+                  />
                 </div>
 
                 {/* The Custom Handwritten / Serif Note */}
-                <div className="flex-1 my-2 overflow-hidden flex items-start">
-                  <p className={`w-full whitespace-pre-wrap select-text break-words pr-1 text-left ${getFontFamilyClass()} overflow-y-auto text-sm leading-relaxed tracking-wide`}
-                     style={{ 
-                       color: palette.textPrimary,
-                       maxHeight: '100%'
-                     }}>
-                    {config.note || "Write a heartfelt note here. Connect with friends and share your aesthetic postcards directly from this canvas..."}
-                  </p>
+                <div className="flex-1 my-1 overflow-hidden flex items-start">
+                  <textarea 
+                    value={config.note}
+                    onChange={(e) => onChangeConfig({ note: e.target.value })}
+                    placeholder="Write a heartfelt note here. Connect with friends and share your aesthetic postcards directly from this canvas..."
+                    className={`w-full h-full bg-transparent border border-transparent hover:border-zinc-200 focus:border-zinc-300 focus:outline-none resize-none whitespace-pre-wrap text-left ${getFontFamilyClass()} text-sm leading-relaxed tracking-wide`}
+                    style={{ color: palette.textPrimary }}
+                  />
                 </div>
 
                 {/* Footer Signature */}
-                <div className="text-[9px] tracking-wide font-serif-lux italic mt-auto border-t pt-1 border-dotted flex justify-between" style={{ borderColor: palette.border }}>
+                <div className="text-[9px] tracking-wide font-serif-lux italic mt-auto border-t pt-1 border-dotted flex items-center justify-between" style={{ borderColor: palette.border }}>
                   <span>With love,</span>
-                  <span className="font-medium">{config.sender || 'Mruga'}</span>
+                  <input 
+                    type="text"
+                    value={config.sender}
+                    onChange={(e) => onChangeConfig({ sender: e.target.value })}
+                    placeholder="Sender"
+                    className="w-24 bg-transparent text-right border-b border-transparent hover:border-zinc-300 focus:border-zinc-500 focus:outline-none font-medium font-serif-lux py-0.5"
+                    style={{ color: palette.textPrimary }}
+                  />
                 </div>
               </div>
 
               {/* Right Column: Title, Stamps, Address Lines */}
-              <div className="w-[48%] h-full flex flex-col justify-between pl-6 relative">
+              <div 
+                className="w-[48%] h-full flex flex-col justify-between pl-6 relative"
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+              >
                 {/* Cursive / Elegant "Post Card" Title */}
                 <div className="text-center mt-1">
-                  <h3 className="font-serif-lux text-lg tracking-[0.3em] font-normal uppercase leading-none" style={{ color: palette.textPrimary }}>
-                    {config.title || 'POST CARD'}
-                  </h3>
+                  <input 
+                    type="text"
+                    value={config.title}
+                    onChange={(e) => onChangeConfig({ title: e.target.value })}
+                    placeholder="POST CARD"
+                    className="w-full bg-transparent text-center border-b border-transparent hover:border-zinc-300 focus:border-zinc-500 focus:outline-none font-serif-lux text-base tracking-[0.3em] font-normal uppercase leading-none py-0.5"
+                    style={{ color: palette.textPrimary }}
+                  />
                   <div className="w-12 h-[1px] mx-auto mt-1" style={{ backgroundColor: palette.textMuted }} />
                 </div>
 
@@ -282,8 +411,15 @@ export default function PostcardPreview({
                 {/* Postcard Address Lines */}
                 <div className="w-full space-y-4 mb-4 mt-auto">
                   <div className="border-b border-dotted pb-0.5 flex items-end justify-between" style={{ borderColor: palette.border }}>
-                    <span className="text-[7px] uppercase font-sans tracking-widest" style={{ color: palette.textMuted }}>To:</span>
-                    <span className="text-xs font-serif-lux pr-2 truncate max-w-[130px] font-medium">{config.recipient || 'Dearest Friend'}</span>
+                    <span className="text-[7px] uppercase font-sans tracking-widest shrink-0" style={{ color: palette.textMuted }}>To:</span>
+                    <input 
+                      type="text"
+                      value={config.recipient}
+                      onChange={(e) => onChangeConfig({ recipient: e.target.value })}
+                      placeholder="Dearest Friend"
+                      className="w-full bg-transparent text-right border-b border-transparent hover:border-zinc-300 focus:border-zinc-500 focus:outline-none font-serif-lux text-xs font-medium pl-2 py-0.5 truncate"
+                      style={{ color: palette.textPrimary }}
+                    />
                   </div>
                   <div className="border-b border-dotted pb-0.5 h-4" style={{ borderColor: palette.border }} />
                   <div className="border-b border-dotted pb-0.5 h-4" style={{ borderColor: palette.border }} />
@@ -324,33 +460,50 @@ export default function PostcardPreview({
                   }}
                 />
               ) : (
-                emptyImagePlaceholder
+                renderEmptyImagePlaceholder()
               )}
             </div>
 
             {/* Bottom Polaroid Captions Pane */}
-            <div className="w-full mt-6 px-2 flex flex-col justify-between items-center text-center">
+            <div 
+              className="w-full mt-6 px-2 flex flex-col justify-between items-center text-center"
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+            >
               {/* Note Content */}
-              <p className={`w-full ${getFontFamilyClass()} text-base tracking-wide max-h-24 overflow-y-auto mb-3 whitespace-pre-wrap text-center`}
-                 style={{ color: palette.textPrimary }}>
-                {config.note || "Collect moments, not things."}
-              </p>
+              <textarea 
+                value={config.note}
+                onChange={(e) => onChangeConfig({ note: e.target.value })}
+                placeholder="Collect moments, not things."
+                className={`w-full bg-transparent border border-transparent hover:border-zinc-200 focus:border-zinc-300 focus:outline-none resize-none text-center ${getFontFamilyClass()} text-sm tracking-wide h-16 leading-relaxed mb-3`}
+                style={{ color: palette.textPrimary }}
+              />
 
               {/* Small details */}
-              <div className="flex items-center space-x-3 text-[10px] tracking-[0.2em] uppercase font-serif-lux opacity-80 pt-2 border-t border-dotted w-full justify-center" style={{ borderColor: palette.border }}>
-                {config.location && (
-                  <span className="flex items-center">
-                    <MapPin className="w-3 h-3 mr-1 stroke-[1.5]" />
-                    {config.location}
-                  </span>
-                )}
-                {config.location && config.date && <span>•</span>}
-                {config.date && (
-                  <span className="flex items-center">
-                    <Calendar className="w-3 h-3 mr-1 stroke-[1.5]" />
-                    {config.date}
-                  </span>
-                )}
+              <div className="flex items-center justify-center space-x-2 text-[10px] tracking-[0.2em] uppercase font-serif-lux pt-2 border-t border-dotted w-full" style={{ borderColor: palette.border }}>
+                <div className="flex items-center max-w-[150px]">
+                  <MapPin className="w-3 h-3 mr-1 stroke-[1.5] text-zinc-400 shrink-0" />
+                  <input 
+                    type="text"
+                    value={config.location}
+                    onChange={(e) => onChangeConfig({ location: e.target.value })}
+                    placeholder="LOCATION"
+                    className="w-full bg-transparent text-center border-b border-transparent hover:border-zinc-300 focus:border-zinc-500 focus:outline-none font-serif-lux text-[9px] uppercase font-medium py-0.5"
+                    style={{ color: palette.textPrimary }}
+                  />
+                </div>
+                <span className="text-zinc-400 font-normal select-none">•</span>
+                <div className="flex items-center max-w-[150px]">
+                  <Calendar className="w-3 h-3 mr-1 stroke-[1.5] text-zinc-400 shrink-0" />
+                  <input 
+                    type="text"
+                    value={config.date}
+                    onChange={(e) => onChangeConfig({ date: e.target.value })}
+                    placeholder="DATE"
+                    className="w-full bg-transparent text-center border-b border-transparent hover:border-zinc-300 focus:border-zinc-500 focus:outline-none font-serif-lux text-[9px] uppercase font-medium py-0.5"
+                    style={{ color: palette.textPrimary }}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -363,32 +516,51 @@ export default function PostcardPreview({
             <div 
               className="w-[42%] h-full p-5 flex flex-col justify-between relative"
               style={{ backgroundColor: palette.badgeBg }}
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
             >
               {/* Card Title */}
               <div>
-                <span className="text-[8px] uppercase tracking-[0.3em] font-sans text-zinc-400 font-semibold leading-none">MEMORIES IN SERIF</span>
-                <h3 className="font-serif-lux text-xl font-semibold tracking-wide uppercase mt-1 leading-tight" style={{ color: palette.textPrimary }}>
-                  {config.title || 'TRAVELS'}
-                </h3>
+                <span className="text-[8px] uppercase tracking-[0.3em] font-sans text-zinc-400 font-semibold leading-none select-none">MEMORIES IN SERIF</span>
+                <input 
+                  type="text"
+                  value={config.title}
+                  onChange={(e) => onChangeConfig({ title: e.target.value })}
+                  placeholder="TRAVELS"
+                  className="w-full bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-zinc-500 focus:outline-none font-serif-lux text-base font-semibold tracking-wide uppercase mt-1 py-0.5"
+                  style={{ color: palette.textPrimary }}
+                />
                 <div className="w-6 h-[1.5px] mt-2" style={{ backgroundColor: palette.accent }} />
               </div>
 
               {/* Customized Note */}
-              <div className="flex-1 my-4 flex items-center justify-start overflow-hidden">
-                <p className={`w-full ${getFontFamilyClass()} text-xs leading-relaxed text-left max-h-[80%] overflow-y-auto whitespace-pre-wrap italic`}
-                   style={{ color: palette.textPrimary }}>
-                  {config.note || "The sun sets slowly behind the ocean cliffs. A perfect postcard written from the warmth of our memory."}
-                </p>
+              <div className="flex-1 my-4 flex items-center justify-start overflow-hidden w-full">
+                <textarea 
+                  value={config.note}
+                  onChange={(e) => onChangeConfig({ note: e.target.value })}
+                  placeholder="The sun sets slowly behind the ocean cliffs. A perfect postcard written from the warmth of our memory."
+                  className={`w-full h-[85%] bg-transparent border border-transparent hover:border-zinc-200 focus:border-zinc-300 focus:outline-none resize-none text-left ${getFontFamilyClass()} text-xs leading-relaxed italic`}
+                  style={{ color: palette.textPrimary }}
+                />
               </div>
 
               {/* Bottom details */}
-              <div className="border-t pt-2 border-dotted" style={{ borderColor: palette.border }}>
-                <div className="text-[10px] font-serif-lux font-semibold uppercase tracking-[0.1em] truncate" style={{ color: palette.textPrimary }}>
-                  {config.location || 'CLIFFSIDE CABIN'}
-                </div>
-                <div className="text-[8px] tracking-[0.1em] text-zinc-500 font-sans mt-0.5">
-                  {config.date || '13 July 2026'}
-                </div>
+              <div className="border-t pt-2 border-dotted space-y-1.5" style={{ borderColor: palette.border }}>
+                <input 
+                  type="text"
+                  value={config.location}
+                  onChange={(e) => onChangeConfig({ location: e.target.value })}
+                  placeholder="LOCATION"
+                  className="w-full bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-zinc-500 focus:outline-none font-serif-lux text-[9px] font-semibold uppercase tracking-[0.1em] py-0.5"
+                  style={{ color: palette.textPrimary }}
+                />
+                <input 
+                  type="text"
+                  value={config.date}
+                  onChange={(e) => onChangeConfig({ date: e.target.value })}
+                  placeholder="DATE"
+                  className="w-full bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-zinc-500 focus:outline-none font-sans text-[8px] tracking-[0.1em] text-zinc-500 uppercase py-0.5"
+                />
               </div>
 
               {/* Elegant decorative background line */}
@@ -420,7 +592,7 @@ export default function PostcardPreview({
                   }}
                 />
               ) : (
-                emptyImagePlaceholder
+                renderEmptyImagePlaceholder()
               )}
 
               {/* Small branding overlay bottom right */}
@@ -458,35 +630,72 @@ export default function PostcardPreview({
                 }}
               />
             ) : (
-              emptyImagePlaceholder
+              renderEmptyImagePlaceholder()
             )}
 
             {/* Glassmorphism Floating card for note */}
-            <div className="absolute bottom-6 left-6 right-6 p-5 rounded-lg border shadow-xl bg-white/95 backdrop-blur-md max-h-[45%] flex flex-col justify-between"
-                 style={{ 
-                   backgroundColor: `${palette.background}F2`, // slight transparency
-                   borderColor: palette.border,
-                   color: palette.textPrimary 
-                 }}>
+            <div 
+              className="absolute bottom-6 left-6 right-6 p-5 rounded-lg border shadow-xl bg-white/95 backdrop-blur-md max-h-[45%] flex flex-col justify-between"
+              style={{ 
+                backgroundColor: `${palette.background}F2`, // slight transparency
+                borderColor: palette.border,
+                color: palette.textPrimary 
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+            >
               
               {/* Note Header and Stamp inline */}
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <h4 className="font-serif-lux text-sm font-semibold tracking-wider uppercase leading-none">{config.title || 'MEMENTO'}</h4>
-                  <p className="text-[8px] uppercase tracking-widest font-sans text-zinc-500 mt-1">{config.location || 'THE GREAT OUTDOORS'}</p>
+              <div className="flex justify-between items-start mb-2 gap-4">
+                <div className="flex-1 space-y-1">
+                  <input 
+                    type="text"
+                    value={config.title}
+                    onChange={(e) => onChangeConfig({ title: e.target.value })}
+                    placeholder="MEMENTO"
+                    className="w-full bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-zinc-500 focus:outline-none font-serif-lux text-xs font-semibold tracking-wider uppercase py-0.5"
+                    style={{ color: palette.textPrimary }}
+                  />
+                  <input 
+                    type="text"
+                    value={config.location}
+                    onChange={(e) => onChangeConfig({ location: e.target.value })}
+                    placeholder="THE GREAT OUTDOORS"
+                    className="w-full bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-zinc-500 focus:outline-none font-sans text-[8px] uppercase tracking-widest text-zinc-500 py-0.5"
+                  />
                 </div>
-                <div className="text-[8px] font-sans tracking-wide text-right">
-                  <div>{config.date || 'July 2026'}</div>
-                  <div className="font-serif italic mt-0.5">By {config.sender || 'Mruga'}</div>
+                <div className="text-[8px] font-sans tracking-wide text-right flex flex-col items-end shrink-0 space-y-1">
+                  <input 
+                    type="text"
+                    value={config.date}
+                    onChange={(e) => onChangeConfig({ date: e.target.value })}
+                    placeholder="July 2026"
+                    className="w-20 bg-transparent text-right border-b border-transparent hover:border-zinc-300 focus:border-zinc-500 focus:outline-none font-sans text-[8px] py-0.5"
+                    style={{ color: palette.textPrimary }}
+                  />
+                  <div className="flex items-center text-[8px] text-zinc-500 italic">
+                    <span>By</span>
+                    <input 
+                      type="text"
+                      value={config.sender}
+                      onChange={(e) => onChangeConfig({ sender: e.target.value })}
+                      placeholder="Mruga"
+                      className="w-16 bg-transparent text-right border-b border-transparent hover:border-zinc-300 focus:border-zinc-500 focus:outline-none ml-1 font-serif font-medium py-0.5 text-[8px]"
+                      style={{ color: palette.textPrimary }}
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Note body */}
-              <div className="flex-1 my-2 overflow-y-auto max-h-24 text-left">
-                <p className={`w-full ${getFontFamilyClass()} text-xs leading-relaxed tracking-wide whitespace-pre-wrap`}
-                   style={{ color: palette.textPrimary }}>
-                  {config.note || "Add your postcard note here. It will display inside this elegant floating card positioned beautifully over your photograph."}
-                </p>
+              <div className="flex-1 my-2 overflow-hidden text-left w-full">
+                <textarea 
+                  value={config.note}
+                  onChange={(e) => onChangeConfig({ note: e.target.value })}
+                  placeholder="Add your postcard note here. It will display inside this elegant floating card positioned beautifully over your photograph."
+                  className={`w-full h-16 bg-transparent border border-transparent hover:border-zinc-200 focus:border-zinc-300 focus:outline-none resize-none text-left ${getFontFamilyClass()} text-xs leading-relaxed tracking-wide`}
+                  style={{ color: palette.textPrimary }}
+                />
               </div>
 
               {/* Minimal decoration stamp emblem if enabled */}
