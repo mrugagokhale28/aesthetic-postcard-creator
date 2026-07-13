@@ -39,14 +39,19 @@ export default function PostcardControls({
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const url = URL.createObjectURL(file);
-      onChangeConfig({ 
-        imageSrc: url,
-        // Reset crop adjustments on new upload
-        imageZoom: 1,
-        imageX: 0,
-        imageY: 0
-      });
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          onChangeConfig({ 
+            imageSrc: event.target.result as string,
+            // Reset crop adjustments on new upload
+            imageZoom: 1,
+            imageX: 0,
+            imageY: 0
+          });
+        }
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -59,13 +64,18 @@ export default function PostcardControls({
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
     if (file && file.type.startsWith('image/')) {
-      const url = URL.createObjectURL(file);
-      onChangeConfig({ 
-        imageSrc: url,
-        imageZoom: 1,
-        imageX: 0,
-        imageY: 0
-      });
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          onChangeConfig({ 
+            imageSrc: event.target.result as string,
+            imageZoom: 1,
+            imageX: 0,
+            imageY: 0
+          });
+        }
+      };
+      reader.readAsDataURL(file);
     }
   };
 
