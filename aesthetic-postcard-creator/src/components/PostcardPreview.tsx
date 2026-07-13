@@ -212,6 +212,7 @@ export default function PostcardPreview({
                   alt="Postcard Artwork" 
                   className="w-full h-full object-cover select-none pointer-events-none transition-all duration-200"
                   referrerPolicy="no-referrer"
+                  crossOrigin="anonymous"
                   style={{
                     filter: getImageFilter(config.filter),
                     transform: `scale(${config.imageZoom}) translate(${config.imageX}px, ${config.imageY}px)`,
@@ -315,6 +316,7 @@ export default function PostcardPreview({
                   alt="Postcard Memory" 
                   className="w-full h-full object-cover select-none pointer-events-none transition-all duration-200"
                   referrerPolicy="no-referrer"
+                  crossOrigin="anonymous"
                   style={{
                     filter: getImageFilter(config.filter),
                     transform: `scale(${config.imageZoom}) translate(${config.imageX}px, ${config.imageY}px)`,
@@ -410,6 +412,7 @@ export default function PostcardPreview({
                   alt="Editorial Cover" 
                   className="w-full h-full object-cover select-none pointer-events-none transition-all duration-200"
                   referrerPolicy="no-referrer"
+                  crossOrigin="anonymous"
                   style={{
                     filter: getImageFilter(config.filter),
                     transform: `scale(${config.imageZoom}) translate(${config.imageX}px, ${config.imageY}px)`,
@@ -447,6 +450,7 @@ export default function PostcardPreview({
                 alt="Cinematic Background" 
                 className="w-full h-full object-cover select-none pointer-events-none transition-all duration-200"
                 referrerPolicy="no-referrer"
+                crossOrigin="anonymous"
                 style={{
                   filter: getImageFilter(config.filter),
                   transform: `scale(${config.imageZoom}) translate(${config.imageX}px, ${config.imageY}px)`,
